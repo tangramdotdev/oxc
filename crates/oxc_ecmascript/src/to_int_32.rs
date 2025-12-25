@@ -16,13 +16,13 @@ impl<T> ToUint32 for T where T: ToInt32 {}
 
 impl ToInt32 for f64 {
     fn to_int_32(&self) -> i32 {
-        #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+        #[cfg(all(target_arch = "aarch64", target_os = "macos", not(debug_assertions)))]
         {
             // macOS aarch64 always has jsconv feature
             // SAFETY: macOS aarch64 always supports jsconv
             unsafe { f64_to_int32_arm64(*self) }
         }
-        #[cfg(all(target_arch = "aarch64", not(target_os = "macos")))]
+        #[cfg(all(target_arch = "aarch64", not(target_os = "macos"), not(debug_assertions)))]
         {
             if std::arch::is_aarch64_feature_detected!("jsconv") {
                 // SAFETY: Feature detection confirmed jsconv is available
@@ -31,7 +31,7 @@ impl ToInt32 for f64 {
                 f64_to_int32_generic(*self)
             }
         }
-        #[cfg(not(target_arch = "aarch64"))]
+        #[cfg(any(not(target_arch = "aarch64"), debug_assertions))]
         {
             f64_to_int32_generic(*self)
         }
@@ -43,7 +43,7 @@ impl ToInt32 for f64 {
 /// This requires ARM v8.3-A or later with the JavaScript conversion (jsconv) feature.
 ///
 /// [FJCVTZS]: https://developer.arm.com/documentation/dui0801/h/A64-Floating-point-Instructions/FJCVTZS
-#[cfg(target_arch = "aarch64")]
+#[cfg(all(target_arch = "aarch64", not(debug_assertions)))]
 #[target_feature(enable = "jsconv")]
 unsafe fn f64_to_int32_arm64(number: f64) -> i32 {
     if number.is_nan() {
@@ -65,6 +65,7 @@ unsafe fn f64_to_int32_arm64(number: f64) -> i32 {
 #[expect(clippy::float_cmp, clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 #[cfg(any(
     test,
+    debug_assertions,
     not(target_arch = "aarch64"),
     all(target_arch = "aarch64", not(target_os = "macos"))
 ))]
@@ -190,7 +191,7 @@ mod test {
         assert_eq!(f64::NAN.to_int_32(), 0);
         assert_eq!(f64_to_int32_generic(f64::NAN), 0);
 
-        #[cfg(target_arch = "aarch64")]
+        #[cfg(all(target_arch = "aarch64", not(debug_assertions)))]
         {
             // SAFETY: This is a test and we're only testing NaN handling
             unsafe {
